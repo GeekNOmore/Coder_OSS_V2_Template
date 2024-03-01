@@ -13,6 +13,37 @@ locals {
   username = data.coder_workspace.me.owner
 }
 
+# dotfiles repo
+module "dotfiles" {
+    source    = "registry.coder.com/modules/dotfiles/coder"
+    agent_id  = coder_agent.main.id
+}
+
+# microsoft visual studio code server (browser)
+module "vscode-web" {
+    source         = "registry.coder.com/modules/vscode-web/coder"
+    version        = "1.0.6"
+    agent_id       = coder_agent.main.id
+    extensions     = ["ms-python.python", "ms-python.vscode-pylance", "ms-python.black-formatter", "golang.go", "christian-kohler.npm-intellisense", "xabikos.JavaScriptSnippets", "redhat.java","vscjava.vscode-java-debug","vscjava.vscode-gradle","dbaeumer.vscode-eslint","esbenp.prettier-vscode","aaron-bond.better-comments","redhat.vscode-yaml"]
+    accept_license = true
+    folder         = "/home/coder"
+}
+
+# jupyterlab
+module "jupyterlab" {
+    source   = "registry.coder.com/modules/jupyterlab/coder"
+    agent_id  = coder_agent.main.id
+    log_path  = "/tmp/jupyterlab.log"
+    port      = 19999
+    share     = "owner"
+}
+
+# jupyter-notebook
+module "jupyter-notebook" {
+  source   = "registry.coder.com/modules/jupyter-notebook/coder"
+  agent_id = coder_agent.main.id
+}
+
 data "coder_provisioner" "me" {
 }
 
@@ -23,38 +54,27 @@ data "coder_workspace" "me" {
 }
 
 resource "coder_agent" "main" {
-  arch           = data.coder_provisioner.me.arch
-  os             = "linux"
+  arch = data.coder_provisioner.me.arch
+  os = "linux"
+  startup_script_behavior = "blocking"
   startup_script = <<-EOT
+    #!/bin/bash
     set -e
 
-    # install and start code-server
+    # Install and start code-server
     curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --prefix=/tmp/code-server --version 4.19.1
-    /tmp/code-server/bin/code-server --auth none --port 13337 >/tmp/code-server.log 2>&1 &
+    nohup /tmp/code-server/bin/code-server --auth none --port 13337 >/tmp/code-server.log 2>&1 &
+
+    # Install Python libraries
+    pip3 install --user pandas >/dev/null 2>&1 &
+
   EOT
 
-  # These environment variables allow you to make Git commits right away after creating a
-  # workspace. Note that they take precedence over configuration defined in ~/.gitconfig!
-  # You can remove this block if you'd prefer to configure Git manually or using
-  # dotfiles. (see docs/dotfiles.md)
   env = {
     GIT_AUTHOR_NAME     = coalesce(data.coder_workspace.me.owner_name, data.coder_workspace.me.owner)
     GIT_AUTHOR_EMAIL    = "${data.coder_workspace.me.owner_email}"
     GIT_COMMITTER_NAME  = coalesce(data.coder_workspace.me.owner_name, data.coder_workspace.me.owner)
     GIT_COMMITTER_EMAIL = "${data.coder_workspace.me.owner_email}"
-  }
-
-  # The following metadata blocks are optional. They are used to display
-  # information about your workspace in the dashboard. You can remove them
-  # if you don't want to display any information.
-  # For basic resources, you can use the `coder stat` command.
-  # If you need more control, you can write your own script.
-  metadata {
-    display_name = "CPU Usage"
-    key          = "0_cpu_usage"
-    script       = "coder stat cpu"
-    interval     = 10
-    timeout      = 1
   }
 
   metadata {
@@ -92,9 +112,8 @@ resource "coder_agent" "main" {
   metadata {
     display_name = "Load Average (Host)"
     key          = "6_load_host"
-    # get load avg scaled by number of cores
-    script   = <<EOT
-      echo "`cat /proc/loadavg | awk '{ print $1 }'` `nproc`" | awk '{ printf "%0.2f", $1/$2 }'
+    script       = <<-EOT
+      echo "$(cat /proc/loadavg | awk '{print $1}') $(nproc)" | awk '{printf "%0.2f", $1/$2}'
     EOT
     interval = 60
     timeout  = 1
@@ -103,13 +122,14 @@ resource "coder_agent" "main" {
   metadata {
     display_name = "Swap Usage (Host)"
     key          = "7_swap_host"
-    script       = <<EOT
-      free -b | awk '/^Swap/ { printf("%.1f/%.1f", $3/1024.0/1024.0/1024.0, $2/1024.0/1024.0/1024.0) }'
+    script       = <<-EOT
+      free -b | awk '/^Swap/ {printf "%.1f/%.1f", $3/1024/1024/1024, $2/1024/1024/1024}'
     EOT
     interval     = 10
     timeout      = 1
   }
 }
+
 
 resource "coder_app" "code-server" {
   agent_id     = coder_agent.main.id
