@@ -69,6 +69,7 @@ resource "coder_agent" "main" {
     # python extension
     /tmp/code-server/bin/code-server --install-extension ms-python.python
     /tmp/code-server/bin/code-server --install-extension ms-python.black-formatter
+    /tmp/code-server/bin/code-server --install-extension ms-toolsai.jupyter
 
     # go
     /tmp/code-server/bin/code-server --install-extension golang.go
@@ -87,7 +88,26 @@ resource "coder_agent" "main" {
     /tmp/code-server/bin/code-server --install-extension esbenp.prettier-vscode
     /tmp/code-server/bin/code-server --install-extension aaron-bond.better-comments
     /tmp/code-server/bin/code-server --install-extension redhat.vscode-yaml
+    /tmp/code-server/bin/code-server --install-extension dracula-theme.theme-dracula
     # /tmp/code-server/bin/code-server --install-extension hashicorp.terraform 
+
+    VSCODE_SETTINGS=$(cat <<EOF
+    {
+    "editor.wordWrap": "off",
+    "workbench.colorTheme": "Dracula",
+    "vim.easymotion": true,
+    "vim.highlightedyank.enable": true,
+    "vim.leader": " ",
+    "vim.useSystemClipboard": true
+    }
+    EOF
+    )
+
+    if [ ! -f ~/.local/share/code-server/User/settings.json ]; then
+      echo "⚙️ Creating settings file..."
+      mkdir -p ~/.local/share/code-server/User
+      echo "$${VSCODE_SETTINGS}" > ~/.local/share/code-server/User/settings.json
+    fi
 
     # Install Python libraries
     pip3 install --user pandas >/dev/null 2>&1 &
