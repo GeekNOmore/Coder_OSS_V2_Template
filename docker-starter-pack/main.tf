@@ -19,16 +19,6 @@ module "dotfiles" {
     agent_id  = coder_agent.main.id
 }
 
-# microsoft visual studio code server (browser)
-module "vscode-web" {
-    source         = "registry.coder.com/modules/vscode-web/coder"
-    version        = "1.0.6"
-    agent_id       = coder_agent.main.id
-    extensions     = ["ms-python.python", "ms-python.vscode-pylance", "ms-python.black-formatter", "golang.go", "christian-kohler.npm-intellisense", "xabikos.JavaScriptSnippets", "redhat.java","vscjava.vscode-java-debug","vscjava.vscode-gradle","dbaeumer.vscode-eslint","esbenp.prettier-vscode","aaron-bond.better-comments","redhat.vscode-yaml"]
-    accept_license = true
-    folder         = "/home/coder"
-}
-
 # jupyterlab
 module "jupyterlab" {
     source   = "registry.coder.com/modules/jupyterlab/coder"
@@ -42,6 +32,7 @@ module "jupyterlab" {
 module "jupyter-notebook" {
   source   = "registry.coder.com/modules/jupyter-notebook/coder"
   agent_id = coder_agent.main.id
+  port     = 19998
 }
 
 data "coder_provisioner" "me" {
@@ -62,8 +53,21 @@ resource "coder_agent" "main" {
     set -e
 
     # Install and start code-server
-    curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --prefix=/tmp/code-server --version 4.19.1
+    curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --prefix=/tmp/code-server 
     nohup /tmp/code-server/bin/code-server --auth none --port 13337 >/tmp/code-server.log 2>&1 &
+
+    /tmp/code-server/bin/code-server --install-extension ms-python.python
+    /tmp/code-server/bin/code-server --install-extension ms-python.black-formatter
+    /tmp/code-server/bin/code-server --install-extension golang.go
+    /tmp/code-server/bin/code-server --install-extension christian-kohler.npm-intellisense
+    /tmp/code-server/bin/code-server --install-extension xabikos.JavaScriptSnippets
+    /tmp/code-server/bin/code-server --install-extension redhat.java
+    /tmp/code-server/bin/code-server --install-extension vscjava.vscode-java-debug
+    /tmp/code-server/bin/code-server --install-extension vscjava.vscode-gradle
+    /tmp/code-server/bin/code-server --install-extension dbaeumer.vscode-eslint
+    /tmp/code-server/bin/code-server --install-extension esbenp.prettier-vscode
+    /tmp/code-server/bin/code-server --install-extension aaron-bond.better-comments
+    /tmp/code-server/bin/code-server --install-extension redhat.vscode-yaml
 
     # Install Python libraries
     pip3 install --user pandas >/dev/null 2>&1 &
