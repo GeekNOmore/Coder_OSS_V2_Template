@@ -22,4 +22,5 @@ fi
 
 echo "👷 Starting jupyter-notebook in background..."
 echo "check logs at ${LOG_PATH}"
-$HOME/.local/bin/jupyter notebook --NotebookApp.ip='0.0.0.0' --ServerApp.port=${PORT} --no-browser --ServerApp.token='' --ServerApp.password='' --$ServerApp.base_url=/@${OWNER}/${lower(NAME)}/apps/j > ${LOG_PATH} 2>&1 &
+$HOME/.local/bin/jupyter notebook --NotebookApp.ip='0.0.0.0' --ServerApp.port=${PORT} --no-browser --ServerApp.token='' --ServerApp.password='' --NotebookApp.base_url=/@${OWNER}/${lower(NAME)}/apps/notebook > ${LOG_PATH} 2>&1 &
+echo "🔗 Notebook is running on /@${OWNER}/$(echo ${NAME} | tr '[:upper:]' '[:lower:]')/apps/notebook"

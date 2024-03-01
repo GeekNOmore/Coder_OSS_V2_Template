@@ -80,7 +80,7 @@ resource "coder_agent" "main" {
     # java
     /tmp/code-server/bin/code-server --install-extension redhat.java
     /tmp/code-server/bin/code-server --install-extension vscjava.vscode-java-debug
-    /tmp/code-server/bin/code-server --install-extension vscjava.vscode-gradle
+    # /tmp/code-server/bin/code-server --install-extension vscjava.vscode-gradle  no release version
 
     # other util
     /tmp/code-server/bin/code-server --install-extension dbaeumer.vscode-eslint
@@ -173,9 +173,9 @@ resource "coder_app" "code-server" {
 
 resource "coder_app" "jupyterlab" {
   agent_id     = coder_agent.main.id
-  slug         = "j"
+  slug         = "lab"
   display_name = "JupyterLab"
-  url          = "http://localhost:19999/@${data.coder_workspace.me.owner}/${lower(data.coder_workspace.me.name)}/apps/j"
+  url          = "http://localhost:19999/@${data.coder_workspace.me.owner}/${lower(data.coder_workspace.me.name)}/apps/lab"
   icon         = "/icon/jupyter.svg"
   subdomain    = false
   share        = "owner"
@@ -183,9 +183,9 @@ resource "coder_app" "jupyterlab" {
 
 resource "coder_app" "jupyter-notebook" {
   agent_id     = coder_agent.main.id
-  slug         = "j"
+  slug         = "notebook"
   display_name = "Jupyter Notebook"
-  url          = "http://localhost:19998/@${data.coder_workspace.me.owner}/${lower(data.coder_workspace.me.name)}/apps/j"
+  url          = "http://localhost:19998/@${data.coder_workspace.me.owner}/${lower(data.coder_workspace.me.name)}/apps/notebook"
   icon         = "/icon/jupyter.svg"
   subdomain    = false
   share        = "owner"
