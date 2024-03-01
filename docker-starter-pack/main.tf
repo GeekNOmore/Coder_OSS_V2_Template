@@ -19,22 +19,6 @@ module "dotfiles" {
     agent_id  = coder_agent.main.id
 }
 
-# jupyterlab
-module "jupyterlab" {
-    source   = "registry.coder.com/modules/jupyterlab/coder"
-    agent_id  = coder_agent.main.id
-    log_path  = "/tmp/jupyterlab.log"
-    port      = 19999
-    share     = "owner"
-}
-
-# jupyter-notebook
-module "jupyter-notebook" {
-  source   = "registry.coder.com/modules/jupyter-notebook/coder"
-  agent_id = coder_agent.main.id
-  port     = 19998
-}
-
 data "coder_provisioner" "me" {
 }
 
@@ -42,6 +26,32 @@ provider "docker" {
 }
 
 data "coder_workspace" "me" {
+}
+
+resource "coder_script" "jupyterlab" {
+  agent_id     = coder_agent.main.id
+  display_name = "jupyterlab"
+  icon         = "/icon/jupyter.svg"
+  script = templatefile("./sh/jupyter_lab_run.sh", {
+    LOG_PATH : "/tmp/jupyterlab.log",
+    PORT : 19999,
+    OWNER : data.coder_workspace.me.owner,
+    NAME  :  data.coder_workspace.me.name
+  })
+  run_on_start = true
+}
+
+resource "coder_script" "jupyter-notebook" {
+  agent_id     = coder_agent.main.id
+  display_name = "jupyter-notebook"
+  icon         = "/icon/jupyter.svg"
+  script = templatefile("./sh/jupyter_notebook_run.sh", {
+    LOG_PATH : "/tmp/jupyter-notebook.log",
+    PORT : 19998,
+    OWNER : data.coder_workspace.me.owner,
+    NAME  :  data.coder_workspace.me.name
+  })
+  run_on_start = true
 }
 
 resource "coder_agent" "main" {
@@ -56,18 +66,28 @@ resource "coder_agent" "main" {
     curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --prefix=/tmp/code-server 
     nohup /tmp/code-server/bin/code-server --auth none --port 13337 >/tmp/code-server.log 2>&1 &
 
+    # python extension
     /tmp/code-server/bin/code-server --install-extension ms-python.python
     /tmp/code-server/bin/code-server --install-extension ms-python.black-formatter
+
+    # go
     /tmp/code-server/bin/code-server --install-extension golang.go
+
+    # react
     /tmp/code-server/bin/code-server --install-extension christian-kohler.npm-intellisense
     /tmp/code-server/bin/code-server --install-extension xabikos.JavaScriptSnippets
+
+    # java
     /tmp/code-server/bin/code-server --install-extension redhat.java
     /tmp/code-server/bin/code-server --install-extension vscjava.vscode-java-debug
     /tmp/code-server/bin/code-server --install-extension vscjava.vscode-gradle
+
+    # other util
     /tmp/code-server/bin/code-server --install-extension dbaeumer.vscode-eslint
     /tmp/code-server/bin/code-server --install-extension esbenp.prettier-vscode
     /tmp/code-server/bin/code-server --install-extension aaron-bond.better-comments
     /tmp/code-server/bin/code-server --install-extension redhat.vscode-yaml
+    # /tmp/code-server/bin/code-server --install-extension hashicorp.terraform 
 
     # Install Python libraries
     pip3 install --user pandas >/dev/null 2>&1 &
@@ -149,6 +169,26 @@ resource "coder_app" "code-server" {
     interval  = 5
     threshold = 6
   }
+}
+
+resource "coder_app" "jupyterlab" {
+  agent_id     = coder_agent.main.id
+  slug         = "j"
+  display_name = "JupyterLab"
+  url          = "http://localhost:19999/@${data.coder_workspace.me.owner}/${lower(data.coder_workspace.me.name)}/apps/j"
+  icon         = "/icon/jupyter.svg"
+  subdomain    = false
+  share        = "owner"
+}
+
+resource "coder_app" "jupyter-notebook" {
+  agent_id     = coder_agent.main.id
+  slug         = "j"
+  display_name = "Jupyter Notebook"
+  url          = "http://localhost:19998/@${data.coder_workspace.me.owner}/${lower(data.coder_workspace.me.name)}/apps/j"
+  icon         = "/icon/jupyter.svg"
+  subdomain    = false
+  share        = "owner"
 }
 
 resource "docker_volume" "home_volume" {
