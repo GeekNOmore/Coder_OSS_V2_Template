@@ -93,13 +93,17 @@ resource "coder_agent" "main" {
 
     VSCODE_SETTINGS=$(cat <<EOF
     {
-    "editor.wordWrap": "off",
-    "workbench.colorTheme": "Dracula",
-    "vim.easymotion": true,
-    "vim.highlightedyank.enable": true,
-    "vim.leader": " ",
-    "vim.useSystemClipboard": true
+      "editor.wordWrap": "off",
+      "workbench.colorTheme": "Dracula",
+      "vim.easymotion": true,
+      "vim.highlightedyank.enable": true,
+      "vim.leader": " ",
+      "vim.useSystemClipboard": true,
+      "vim.replaceWithRegister": true,
+      "vim.sneak": true,
+      "vim.sneakUseIgnorecaseAndSmartcase": true
     }
+
     EOF
     )
 
