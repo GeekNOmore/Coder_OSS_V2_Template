@@ -14,7 +14,14 @@ RUN apt-get update && apt-get install -y \
     curl \
     wget \
     software-properties-common \
-    unzip
+    unzip \
+    locales
+
+# Set the locale
+RUN locale-gen en_US.UTF-8
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
 
 # Install Python 3.9
 RUN add-apt-repository ppa:deadsnakes/ppa && \
@@ -61,19 +68,30 @@ RUN wget https://services.gradle.org/distributions/gradle-7.2-bin.zip -P /tmp &&
 ENV GRADLE_HOME=/opt/gradle/gradle-7.2
 ENV PATH=${GRADLE_HOME}/bin:${PATH}
 
-# set up global git hook to prevent from commiting to master
+# Set up Git hooks for branch naming convention and push restrictions
 RUN mkdir -p /git-hooks && \
+    # Pre-commit hook
     echo '#!/bin/bash\n\
-while read oldrev newrev refname\n\
-do\n\
-  if [[ $refname = "refs/heads/master" ]] ; then\n\
-    echo "Direct pushes to master are not allowed. Please use a pull request."\n\
+branch=$(git rev-parse --abbrev-ref HEAD)\n\
+valid_branch_regex="^feature\\.[a-zA-Z0-9]+\\.[0-9]{8}(\\.[a-zA-Z0-9._-]+)?$"\n\
+feature_branch_error="All changes should be made on a feature branch. Please create a branch before committing your changes."\n\
+if [[ ! $branch =~ $valid_branch_regex ]]; then\n\
+    echo "${feature_branch_error}"\n\
     exit 1\n\
-  fi\n\
-done' > /git-hooks/pre-receive && \
-    chmod +x /git-hooks/pre-receive
-
-RUN git config --global core.hooksPath /git-hooks
+fi\n\
+exit 0' > /git-hooks/pre-commit && \
+    chmod +x /git-hooks/pre-commit && \
+    # Pre-push hook
+    echo '#!/bin/bash\n\
+read local_ref local_sha1 remote_ref remote_sha1\n\
+valid_remote_ref_regex="^refs/heads/feature\\.[a-zA-Z0-9]+\\.[0-9]{8}(\\.[a-zA-Z0-9._-]+)?$"\n\
+commit_to_non_feat_branch_error="Pushing to '"'"'${remote_ref}'"'"' is not allowed. Please use a feature branch instead."\n\
+if [[ ! $remote_ref =~ $valid_remote_ref_regex ]]; then\n\
+    echo "${commit_to_non_feat_branch_error}"\n\
+    exit 1\n\
+fi\n\
+exit 0' > /git-hooks/pre-push && \
+    chmod +x /git-hooks/pre-push
 
 # Install JupyterLab
 # RUN python3.9 -m pip install jupyterlab notebook 
@@ -87,7 +105,9 @@ RUN useradd --groups sudo --no-create-home --shell /bin/bash ${USER} \
 	&& echo "${USER} ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/${USER} \
 	&& chmod 0440 /etc/sudoers.d/${USER}
 USER ${USER}
-WORKDIR /home/${USER}
+WORKDIR /home/${USER}/workspace
+
+RUN git config --global core.hooksPath /git-hooks
 
 # Keep the container running
 CMD ["tail", "-f", "/dev/null"]
