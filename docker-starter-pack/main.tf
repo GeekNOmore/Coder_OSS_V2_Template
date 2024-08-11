@@ -9,8 +9,11 @@ terraform {
   }
 }
 
+data "coder_workspace_owner" "me" {
+}
+
 locals {
-  username = data.coder_workspace.me.owner
+  username = data.coder_workspace_owner.me.name
 }
 
 # dotfiles repo
@@ -35,7 +38,7 @@ resource "coder_script" "jupyterlab" {
   script = templatefile("./sh/jupyter_lab_run.sh", {
     LOG_PATH : "/tmp/jupyterlab.log",
     PORT : 19999,
-    OWNER : data.coder_workspace.me.owner,
+    OWNER : data.coder_workspace_owner.me.name,
     NAME  :  data.coder_workspace.me.name
   })
   run_on_start = true
@@ -48,7 +51,7 @@ resource "coder_script" "jupyter-notebook" {
   script = templatefile("./sh/jupyter_notebook_run.sh", {
     LOG_PATH : "/tmp/jupyter-notebook.log",
     PORT : 19998,
-    OWNER : data.coder_workspace.me.owner,
+    OWNER : data.coder_workspace_owner.me.name,
     NAME  :  data.coder_workspace.me.name
   })
   run_on_start = true
@@ -88,7 +91,7 @@ resource "coder_agent" "main" {
     /tmp/code-server/bin/code-server --install-extension esbenp.prettier-vscode
     /tmp/code-server/bin/code-server --install-extension aaron-bond.better-comments
     /tmp/code-server/bin/code-server --install-extension redhat.vscode-yaml
-    /tmp/code-server/bin/code-server --install-extension dracula-theme.theme-dracula
+    /tmp/code-server/bin/code-server --install-extension dracula-theme.theme-dracula@2.24.2
     # /tmp/code-server/bin/code-server --install-extension hashicorp.terraform 
 
     VSCODE_SETTINGS=$(cat <<EOF
@@ -119,10 +122,10 @@ resource "coder_agent" "main" {
   EOT
 
   env = {
-    GIT_AUTHOR_NAME     = coalesce(data.coder_workspace.me.owner_name, data.coder_workspace.me.owner)
-    GIT_AUTHOR_EMAIL    = "${data.coder_workspace.me.owner_email}"
-    GIT_COMMITTER_NAME  = coalesce(data.coder_workspace.me.owner_name, data.coder_workspace.me.owner)
-    GIT_COMMITTER_EMAIL = "${data.coder_workspace.me.owner_email}"
+    GIT_AUTHOR_NAME     = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_AUTHOR_EMAIL    = "${data.coder_workspace_owner.me.email}"
+    GIT_COMMITTER_NAME  = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
+    GIT_COMMITTER_EMAIL = "${data.coder_workspace_owner.me.email}"
   }
 
   metadata {
@@ -199,7 +202,7 @@ resource "coder_app" "jupyterlab" {
   agent_id     = coder_agent.main.id
   slug         = "lab"
   display_name = "JupyterLab"
-  url          = "http://localhost:19999/@${data.coder_workspace.me.owner}/${lower(data.coder_workspace.me.name)}/apps/lab"
+  url          = "http://localhost:19999/@${data.coder_workspace_owner.me.name}/${lower(data.coder_workspace.me.name)}/apps/lab"
   icon         = "/icon/jupyter.svg"
   subdomain    = false
   share        = "owner"
@@ -209,7 +212,7 @@ resource "coder_app" "jupyter-notebook" {
   agent_id     = coder_agent.main.id
   slug         = "notebook"
   display_name = "Jupyter Notebook"
-  url          = "http://localhost:19998/@${data.coder_workspace.me.owner}/${lower(data.coder_workspace.me.name)}/apps/notebook"
+  url          = "http://localhost:19998/@${data.coder_workspace_owner.me.name}/${lower(data.coder_workspace.me.name)}/apps/notebook"
   icon         = "/icon/jupyter.svg"
   subdomain    = false
   share        = "owner"
@@ -224,11 +227,11 @@ resource "docker_volume" "home_volume" {
   # Add labels in Docker to keep track of orphan resources.
   labels {
     label = "coder.owner"
-    value = data.coder_workspace.me.owner
+    value = data.coder_workspace_owner.me.name
   }
   labels {
     label = "coder.owner_id"
-    value = data.coder_workspace.me.owner_id
+    value = data.coder_workspace_owner.me.id
   }
   labels {
     label = "coder.workspace_id"
@@ -259,7 +262,7 @@ resource "docker_container" "workspace" {
   count = data.coder_workspace.me.start_count
   image = docker_image.main.name
   # Uses lower() to avoid Docker restriction on container names.
-  name = "coder-${data.coder_workspace.me.owner}-${lower(data.coder_workspace.me.name)}"
+  name = "coder-${data.coder_workspace_owner.me.name}-${lower(data.coder_workspace.me.name)}"
   # Hostname makes the shell more user friendly: coder@my-workspace:~$
   hostname = data.coder_workspace.me.name
   # Use the docker gateway if the access URL is 127.0.0.1
@@ -278,11 +281,11 @@ resource "docker_container" "workspace" {
   # Add labels in Docker to keep track of orphan resources.
   labels {
     label = "coder.owner"
-    value = data.coder_workspace.me.owner
+    value = data.coder_workspace_owner.me.name
   }
   labels {
     label = "coder.owner_id"
-    value = data.coder_workspace.me.owner_id
+    value = data.coder_workspace_owner.me.id
   }
   labels {
     label = "coder.workspace_id"
