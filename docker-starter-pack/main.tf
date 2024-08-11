@@ -104,7 +104,8 @@ resource "coder_agent" "main" {
       "vim.useSystemClipboard": true,
       "vim.replaceWithRegister": true,
       "vim.sneak": true,
-      "vim.sneakUseIgnorecaseAndSmartcase": true
+      "vim.sneakUseIgnorecaseAndSmartcase": true,
+      "git.branchValidationRegex": "feature\\.[a-zA-Z0-9]+\\.[0-9]{8}(\\.[a-zA-Z0-9._-]+)?$"
     }
 
     EOF
