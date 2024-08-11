@@ -22,8 +22,12 @@ RUN add-apt-repository ppa:deadsnakes/ppa && \
     apt-get install -y python3.9 python3.9-venv python3.9-dev python3-pip
 
 # Install Node.js and npm for React
-RUN curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
+RUN mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update && \
     apt-get install -y nodejs && \
+    npm install -g npm@latest && \
     npm install -g create-react-app
 
 # Install Java 18
