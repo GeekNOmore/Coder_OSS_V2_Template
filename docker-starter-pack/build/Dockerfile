@@ -57,6 +57,20 @@ RUN wget https://services.gradle.org/distributions/gradle-7.2-bin.zip -P /tmp &&
 ENV GRADLE_HOME=/opt/gradle/gradle-7.2
 ENV PATH=${GRADLE_HOME}/bin:${PATH}
 
+# set up global git hook to prevent from commiting to master
+RUN mkdir -p /git-hooks && \
+    echo '#!/bin/bash\n\
+while read oldrev newrev refname\n\
+do\n\
+  if [[ $refname = "refs/heads/master" ]] ; then\n\
+    echo "Direct pushes to master are not allowed. Please use a pull request."\n\
+    exit 1\n\
+  fi\n\
+done' > /git-hooks/pre-receive && \
+    chmod +x /git-hooks/pre-receive
+
+RUN git config --global core.hooksPath /git-hooks
+
 # Install JupyterLab
 # RUN python3.9 -m pip install jupyterlab notebook 
 
