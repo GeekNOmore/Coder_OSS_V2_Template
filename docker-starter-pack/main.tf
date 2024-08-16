@@ -31,6 +31,18 @@ provider "docker" {
 data "coder_workspace" "me" {
 }
 
+provider "coder" {
+}
+
+data "coder_external_auth" "github" {
+  id = "lw2773"
+  optional = true
+}
+
+variable "CODE_VAULT_TOKEN" {
+  default = ""
+}
+
 resource "coder_script" "jupyterlab" {
   agent_id     = coder_agent.main.id
   display_name = "jupyterlab"
@@ -42,6 +54,15 @@ resource "coder_script" "jupyterlab" {
     NAME  :  data.coder_workspace.me.name
   })
   run_on_start = true
+}
+
+data "coder_parameter" "override_code_vault_token" {
+  name        = "CODE_VAULT_ACCESS_TOKEN"
+  display_name = "Override Code Vault Access Token"
+  description  = "Override the default read only token."
+  type        = "string"
+  default     = ""
+  mutable     = true
 }
 
 resource "coder_script" "jupyter-notebook" {
@@ -61,39 +82,46 @@ resource "coder_agent" "main" {
   arch = data.coder_provisioner.me.arch
   os = "linux"
   startup_script_behavior = "blocking"
-  startup_script = <<-EOT
+  startup_script           = <<-EOT
     #!/bin/bash
     set -e
 
+    export PATH="$HOME/.local/bin:$PATH"
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+
+    # Function to log messages
+    log() {
+      echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
+    }
+
     # Install and start code-server
+    log "Installing and starting code-server..."
     curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --prefix=/tmp/code-server 
     nohup /tmp/code-server/bin/code-server --auth none --port 13337 >/tmp/code-server.log 2>&1 &
 
-    # python extension
-    /tmp/code-server/bin/code-server --install-extension ms-python.python
-    /tmp/code-server/bin/code-server --install-extension ms-python.black-formatter
-    /tmp/code-server/bin/code-server --install-extension ms-toolsai.jupyter
+    # Install VS Code extensions
+    log "Installing VS Code extensions..."
+    EXTENSIONS=(
+      "ms-python.python"
+      "ms-python.black-formatter"
+      "ms-toolsai.jupyter"
+      "golang.go"
+      "christian-kohler.npm-intellisense"
+      "xabikos.JavaScriptSnippets"
+      "redhat.java"
+      "vscjava.vscode-java-debug"
+      "dbaeumer.vscode-eslint"
+      "esbenp.prettier-vscode"
+      "aaron-bond.better-comments"
+      "redhat.vscode-yaml"
+      "dracula-theme.theme-dracula@2.24.2"
+    )
+    for ext in "$${EXTENSIONS[@]}"; do
+      /tmp/code-server/bin/code-server --install-extension "$ext"
+    done
 
-    # go
-    /tmp/code-server/bin/code-server --install-extension golang.go
-
-    # react
-    /tmp/code-server/bin/code-server --install-extension christian-kohler.npm-intellisense
-    /tmp/code-server/bin/code-server --install-extension xabikos.JavaScriptSnippets
-
-    # java
-    /tmp/code-server/bin/code-server --install-extension redhat.java
-    /tmp/code-server/bin/code-server --install-extension vscjava.vscode-java-debug
-    # /tmp/code-server/bin/code-server --install-extension vscjava.vscode-gradle  no release version
-
-    # other util
-    /tmp/code-server/bin/code-server --install-extension dbaeumer.vscode-eslint
-    /tmp/code-server/bin/code-server --install-extension esbenp.prettier-vscode
-    /tmp/code-server/bin/code-server --install-extension aaron-bond.better-comments
-    /tmp/code-server/bin/code-server --install-extension redhat.vscode-yaml
-    /tmp/code-server/bin/code-server --install-extension dracula-theme.theme-dracula@2.24.2
-    # /tmp/code-server/bin/code-server --install-extension hashicorp.terraform 
-
+    # Configure VS Code settings
+    log "Configuring VS Code settings..."
     VSCODE_SETTINGS=$(cat <<EOF
     {
       "editor.wordWrap": "off",
@@ -107,10 +135,8 @@ resource "coder_agent" "main" {
       "vim.sneakUseIgnorecaseAndSmartcase": true,
       "git.branchValidationRegex": "feature\\.[a-zA-Z0-9]+\\.[0-9]{8}(\\.[a-zA-Z0-9._-]+)?$"
     }
-
     EOF
     )
-
     if [ ! -f ~/.local/share/code-server/User/settings.json ]; then
       echo "⚙️ Creating settings file..."
       mkdir -p ~/.local/share/code-server/User
@@ -118,8 +144,55 @@ resource "coder_agent" "main" {
     fi
 
     # Install Python libraries
-    pip3 install --user pandas >/dev/null 2>&1 &
+    log "Installing Python libraries..."
+    pip install pandas --break-system-packages >/dev/null 2>&1 &
 
+    # Declare TOKEN variable based on OVERRIDE_CODE_VAULT_TOKEN
+    if [ -n "$OVERRIDE_CODE_VAULT_TOKEN" ]; then
+      TOKEN="$OVERRIDE_CODE_VAULT_TOKEN"
+    else
+      TOKEN="$CODE_VAULT_TOKEN"
+    fi
+
+    # Set up Git credential helper
+    log "Setting up Git credential helper..."
+    git config --global credential.helper store
+    echo "https://$TOKEN:x-oauth-basic@github.com" > ~/.git-credentials
+    chmod 600 ~/.git-credentials
+
+    # Clone and set up code_vault repository
+    log "Setting up code_vault repository..."
+    cd /home/${data.coder_workspace_owner.me.name}/workspace
+    if [ ! -d "code_vault" ]; then
+      if git clone https://github.com/GeekNOmore/code_vault.git; then
+        log "Successfully cloned code_vault repository"
+      else
+        log "Failed to clone code_vault repository. It might already exist or there might be a network issue."
+      fi
+    else
+      log "code_vault directory already exists. Skipping clone."
+      cd code_vault
+      git fetch origin
+      git reset --hard origin/master  # or whatever your default branch is
+      cd ..
+    fi
+    cd code_vault
+    pip install -r requirements.txt --break-system-packages
+    python3 ipython_shell/start.py
+
+    # Install custom VS Code extension
+    log "Installing custom VS Code extension..."
+    GITHUB_USERNAME="GeekNOmore"
+    REPO_NAME="core_extension"
+    API_URL="https://api.github.com/repos/$GITHUB_USERNAME/$REPO_NAME/releases/latest"
+    RELEASE_INFO=$(curl -s -H "Authorization: token $TOKEN" -H "Accept: application/vnd.github.v3+json" $API_URL)
+    ASSET_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[0].url')
+    FILENAME=$(echo "$RELEASE_INFO" | jq -r '.assets[0].name')
+    curl -L -H "Authorization: token $TOKEN" -H "Accept: application/octet-stream" -o "$FILENAME" "$ASSET_URL"
+    /tmp/code-server/bin/code-server --install-extension "$FILENAME"
+    rm "$FILENAME"
+
+    log "Setup completed successfully."
   EOT
 
   env = {
@@ -127,6 +200,9 @@ resource "coder_agent" "main" {
     GIT_AUTHOR_EMAIL    = "${data.coder_workspace_owner.me.email}"
     GIT_COMMITTER_NAME  = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
     GIT_COMMITTER_EMAIL = "${data.coder_workspace_owner.me.email}"
+    PATH = "$HOME/.local/bin:$PATH"
+    OVERRIDE_CODE_VAULT_TOKEN = data.coder_parameter.override_code_vault_token.value,
+    CODE_VAULT_TOKEN = var.CODE_VAULT_TOKEN,
   }
 
   metadata {
@@ -268,7 +344,9 @@ resource "docker_container" "workspace" {
   hostname = data.coder_workspace.me.name
   # Use the docker gateway if the access URL is 127.0.0.1
   entrypoint = ["sh", "-c", replace(coder_agent.main.init_script, "/localhost|127\\.0\\.0\\.1/", "host.docker.internal")]
-  env        = ["CODER_AGENT_TOKEN=${coder_agent.main.token}"]
+  env        = [
+    "CODER_AGENT_TOKEN=${coder_agent.main.token}",
+    ]
   host {
     host = "host.docker.internal"
     ip   = "host-gateway"

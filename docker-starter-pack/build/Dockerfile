@@ -15,7 +15,9 @@ RUN apt-get update && apt-get install -y \
     wget \
     software-properties-common \
     unzip \
-    locales
+    locales \
+    jq \
+    python3-pip
 
 # Set the locale
 RUN locale-gen en_US.UTF-8
@@ -24,9 +26,11 @@ ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
 # Install Python 3.9
-RUN add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get update && \
-    apt-get install -y python3.9 python3.9-venv python3.9-dev python3-pip
+# RUN add-apt-repository ppa:deadsnakes/ppa && \
+#     apt-get update && \
+#     apt-get install -y python3.9 python3.9-venv python3.9-dev python3-pip
+RUN PYTHON_VERSION=$(python3 --version | cut -d ' ' -f 2 | cut -d '.' -f 1,2) && \
+    apt-get install -y python${PYTHON_VERSION}-venv
 
 # Install Node.js and npm for React
 RUN mkdir -p /etc/apt/keyrings && \
