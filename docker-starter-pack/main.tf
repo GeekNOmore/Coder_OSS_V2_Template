@@ -31,16 +31,17 @@ provider "docker" {
 data "coder_workspace" "me" {
 }
 
-provider "coder" {
-}
-
-data "coder_external_auth" "github" {
-  id = "lw2773"
-  optional = true
+module "git-config" {
+  source   = "registry.coder.com/modules/git-config/coder"
+  version  = "1.0.15"
+  agent_id = coder_agent.main.id  
+  allow_username_change = true
+  allow_email_change    = true
 }
 
 variable "CODE_VAULT_TOKEN" {
   default = ""
+  sensitive = true
 }
 
 resource "coder_script" "jupyterlab" {
