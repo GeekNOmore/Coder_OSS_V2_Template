@@ -17,7 +17,10 @@ RUN apt-get update && apt-get install -y \
     unzip \
     locales \
     jq \
-    python3-pip
+    python3-pip \
+    cron
+
+RUN service cron start
 
 # Set the locale
 RUN locale-gen en_US.UTF-8

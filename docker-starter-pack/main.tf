@@ -31,17 +31,17 @@ provider "docker" {
 data "coder_workspace" "me" {
 }
 
+variable "CODE_VAULT_TOKEN" {
+  default = ""
+  sensitive = true
+}
+
 module "git-config" {
   source   = "registry.coder.com/modules/git-config/coder"
   version  = "1.0.15"
   agent_id = coder_agent.main.id  
   allow_username_change = true
   allow_email_change    = true
-}
-
-variable "CODE_VAULT_TOKEN" {
-  default = ""
-  sensitive = true
 }
 
 resource "coder_script" "jupyterlab" {
@@ -116,6 +116,7 @@ resource "coder_agent" "main" {
       "aaron-bond.better-comments"
       "redhat.vscode-yaml"
       "dracula-theme.theme-dracula@2.24.2"
+      "charliermarsh.ruff"
     )
     for ext in "$${EXTENSIONS[@]}"; do
       /tmp/code-server/bin/code-server --install-extension "$ext"
@@ -134,7 +135,8 @@ resource "coder_agent" "main" {
       "vim.replaceWithRegister": true,
       "vim.sneak": true,
       "vim.sneakUseIgnorecaseAndSmartcase": true,
-      "git.branchValidationRegex": "feature\\.[a-zA-Z0-9]+\\.[0-9]{8}(\\.[a-zA-Z0-9._-]+)?$"
+      "git.branchValidationRegex": "feature\\\.[a-zA-Z0-9]+\\\.[0-9]{8}(\\\.[a-zA-Z0-9._-]+)?$",
+      "git.confirmSync": false,
     }
     EOF
     )
@@ -157,22 +159,28 @@ resource "coder_agent" "main" {
 
     # Set up Git credential helper
     log "Setting up Git credential helper..."
-    git config --global credential.helper store
-    echo "https://$TOKEN:x-oauth-basic@github.com" > ~/.git-credentials
-    chmod 600 ~/.git-credentials
+    REPO_URL="https://github.com/GeekNOmore/code_vault.git"
+    REPO_URL_WITH_TOKEN="https://$TOKEN:x-oauth-basic@github.com/GeekNOmore/code_vault.git"
+
+    log "Setting up repository-specific URL with token..."
+    # git config --global url."$REPO_URL_WITH_TOKEN".insteadOf "$REPO_URL"
 
     # Clone and set up code_vault repository
     log "Setting up code_vault repository..."
     cd /home/${data.coder_workspace_owner.me.name}/workspace
     if [ ! -d "code_vault" ]; then
-      if git clone https://github.com/GeekNOmore/code_vault.git; then
+      if git clone "$REPO_URL"; then
         log "Successfully cloned code_vault repository"
+        cd code_vault
+        git remote set-url origin "$REPO_URL_WITH_TOKEN"
+        cd ..
       else
         log "Failed to clone code_vault repository. It might already exist or there might be a network issue."
       fi
     else
       log "code_vault directory already exists. Skipping clone."
       cd code_vault
+      git remote set-url origin "$REPO_URL_WITH_TOKEN"
       git fetch origin
       git reset --hard origin/master  # or whatever your default branch is
       cd ..
@@ -181,17 +189,24 @@ resource "coder_agent" "main" {
     pip install -r requirements.txt --break-system-packages
     python3 ipython_shell/start.py
 
-    # Install custom VS Code extension
-    log "Installing custom VS Code extension..."
-    GITHUB_USERNAME="GeekNOmore"
-    REPO_NAME="core_extension"
-    API_URL="https://api.github.com/repos/$GITHUB_USERNAME/$REPO_NAME/releases/latest"
-    RELEASE_INFO=$(curl -s -H "Authorization: token $TOKEN" -H "Accept: application/vnd.github.v3+json" $API_URL)
-    ASSET_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[0].url')
-    FILENAME=$(echo "$RELEASE_INFO" | jq -r '.assets[0].name')
-    curl -L -H "Authorization: token $TOKEN" -H "Accept: application/octet-stream" -o "$FILENAME" "$ASSET_URL"
-    /tmp/code-server/bin/code-server --install-extension "$FILENAME"
-    rm "$FILENAME"
+    SCRIPT_PATH="/home/${data.coder_workspace_owner.me.name}/workspace/code_vault/install_latest_core_extension.sh"
+
+    # Execute the install_latest_core_extension.sh script
+    log "Executing install_latest_core_extension.sh..."
+    bash "$SCRIPT_PATH"
+
+    # Setup cron job to run install_latest_core_extension.sh every midnight (if not already set)
+    CRON_CMD="0 0 * * * bash $SCRIPT_PATH"
+
+    if ! crontab -l 2>/dev/null | grep -q "$SCRIPT_PATH"; then
+        log "Setting up cron job to run install_latest_core_extension.sh daily at midnight..."
+        (crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -
+        log "Cron job setup complete. install_latest_core_extension.sh will run daily at midnight."
+    else
+        log "Cron job for install_latest_core_extension.sh already exists. Skipping cron job setup."
+    fi
+
+    log "Script execution and cron job setup (if needed) completed."
 
     log "Setup completed successfully."
   EOT

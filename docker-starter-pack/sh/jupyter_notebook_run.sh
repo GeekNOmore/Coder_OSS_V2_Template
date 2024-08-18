@@ -14,7 +14,7 @@ if ! command -v jupyter-notebook > /dev/null 2>&1; then
     exit 1
   fi
   # install jupyter-notebook
-  pip3 install --upgrade --no-cache-dir --no-warn-script-location jupyter
+  pip3 install --upgrade --no-cache-dir --no-warn-script-location --break-system-packages jupyter
   echo "🥳 jupyter-notebook has been installed\n\n"
 else
   echo "🥳 jupyter-notebook is already installed\n\n"
