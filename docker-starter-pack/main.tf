@@ -36,6 +36,11 @@ variable "CODE_VAULT_TOKEN" {
   sensitive = true
 }
 
+variable "DB_PASSWORD" {
+  default = ""
+  sensitive = true
+}
+
 module "git-config" {
   source   = "registry.coder.com/modules/git-config/coder"
   version  = "1.0.15"
@@ -114,7 +119,7 @@ resource "coder_agent" "main" {
       "dbaeumer.vscode-eslint"
       "esbenp.prettier-vscode"
       "aaron-bond.better-comments"
-      "redhat.vscode-yaml"
+      # "redhat.vscode-yaml"
       "dracula-theme.theme-dracula@2.24.2"
       "charliermarsh.ruff"
     )
@@ -219,6 +224,11 @@ resource "coder_agent" "main" {
     PATH = "$HOME/.local/bin:$PATH"
     OVERRIDE_CODE_VAULT_TOKEN = data.coder_parameter.override_code_vault_token.value,
     CODE_VAULT_TOKEN = var.CODE_VAULT_TOKEN,
+    DB_NAME = "scheduler_db",
+    DB_USER = "admin",
+    DB_PASSWORD = var.DB_PASSWORD,
+    DB_HOST = "host.docker.internal",
+    DB_PORT = 5400,
   }
 
   metadata {
@@ -345,6 +355,11 @@ resource "docker_image" "main" {
     build_args = {
       USER = local.username
     }
+    extra_hosts = [
+      "host.docker.internal:host-gateway",
+      "db:host-gateway",
+      "backend:host-gateway"
+    ]
   }
   triggers = {
     dir_sha1 = sha1(join("", [for f in fileset(path.module, "build/*") : filesha1(f)]))
